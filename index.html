@@ -176,6 +176,7 @@ textarea{width:100%;resize:vertical}
 #authForm .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .btn.big{padding:12px;font-size:16px}
 #authForm .linkbtn{justify-self:center;color:var(--pitch)}
+.auth-sub{color:var(--brand-ink);opacity:.85;font-size:17px;margin-top:4px}
 body{margin:0}
 [hidden]{display:none!important}
 img{max-width:100%}
@@ -203,7 +204,7 @@ img{max-width:100%}
   <div class="notice" id="modeNote" hidden>Demo mode: changes are not saved. Add your Supabase keys in config.js to save data and share it between volunteers.</div>
   <section class="auth" id="authScreen" hidden>
     <div class="auth-inner">
-      <div class="auth-brand"><img src="badge.png" alt="Nordic Cup Gothenburg logo"><h1>Nordic Cup 2027</h1><div class="powered">Powered by YOUacademy</div></div>
+      <div class="auth-brand"><img src="badge.png" alt="Nordic Cup Gothenburg logo"><h1>Nordic Cup 2027</h1><div class="powered">Powered by YOUacademy</div><div class="auth-sub">Team and player registrations</div></div>
       <div class="auth-card">
         <div class="tabs" id="authTabs" role="tablist"><button type="button" role="tab" data-auth="login">Log in</button><button type="button" role="tab" data-auth="signup">Sign up</button></div>
         <form id="authForm"></form>
@@ -272,8 +273,8 @@ function pill(t,c){
 }
 
 /* ---------- persistence (Supabase) ---------- */
-function toRow(t){return {id:t.id,name:t.name||"",age:t.age||"",leader:t.leader||"",phone:t.phone||"",players:t.players||[],payments:t.payments||[],created_at:t.createdAt||Date.now()};}
-function fromRow(r){return {id:r.id,name:r.name,age:r.age,leader:r.leader,phone:r.phone,players:r.players||[],payments:r.payments||[],createdAt:r.created_at};}
+function toRow(t){return {id:t.id,name:t.name||"",age:t.age||"",leader:t.leader||"",phone:t.phone||"",players:t.players||[],coaches:t.coaches||[],payments:t.payments||[],created_at:t.createdAt||Date.now()};}
+function fromRow(r){return {id:r.id,name:r.name,age:r.age,leader:r.leader,phone:r.phone,players:r.players||[],coaches:r.coaches||[],payments:r.payments||[],createdAt:r.created_at};}
 function saveTeam(t){
   if(!live){render();return;}
   sb.from("teams").upsert(toRow(t)).then(({error})=>{ if(error) showErr(error); });
@@ -316,7 +317,7 @@ function renderList(){
   ul.innerHTML=items.map(t=>{const c=calc(t);
     return `<li><button type="button" data-id="${t.id}" aria-current="${S.sel===t.id&&S.view==="detail"}">
       <span class="tname">${esc(t.name)}</span>${pill(t,c)}
-      <span class="tmeta num">${c.total} players · paid ${kr(c.paid)} of ${kr(c.due)}${c.late?` · ${c.late} added`:""}</span>
+      <span class="tmeta num">${c.total} players${(t.coaches||[]).length?` · ${(t.coaches||[]).length} coach${(t.coaches||[]).length>1?"es":""}`:""} · paid ${kr(c.paid)} of ${kr(c.due)}${c.late?` · ${c.late} added`:""}</span>
     </button></li>`;}).join("");
 }
 function renderRight(){
@@ -380,6 +381,19 @@ function renderRight(){
       <button class="btn primary" type="submit">Add player</button>
     </form>
     <p class="hint">${S.org?`A player added here is marked "Added at desk" and ${kr(c.pf)} is added to the team's bill.`:`Each player on the list adds ${kr(c.pf)} to your team's bill.`}</p>
+    <div class="sec-h"><h3>Coaches</h3><span class="meta num">${(t.coaches||[]).length} on the list · no fee</span></div>
+    <ul class="players">
+      ${(t.coaches||[]).map(p=>`<li>
+        <span class="pn">${esc(p.name)} ${p.phone?`<span class="yr">${esc(p.phone)}</span>`:""}</span>
+        <button class="xbtn" type="button" data-delc="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>
+      </li>`).join("")||`<li class="empty" style="justify-content:center">No coaches added yet.</li>`}
+    </ul>
+    <form class="addp" id="addCoach" autocomplete="off">
+      <input type="text" id="newCName" placeholder="Coach name" aria-label="Coach name" required>
+      <input type="text" id="newCPhone" placeholder="Phone" aria-label="Coach phone">
+      <button class="btn primary" type="submit">Add coach</button>
+    </form>
+    <p class="hint">Coaches don't pay and don't count towards the bill.</p>
   </div>`;
 }
 function renderTeamForm(r){
@@ -441,6 +455,7 @@ document.addEventListener("click",e=>{
   if(b.id==="tfDel"){if(!S.confirmDel){S.confirmDel=true;renderRight();return;} deleteTeam(S.sel);S.view="detail";return;}
   const t=cur(); if(!t) return;
   if(b.dataset.delp){t.players=t.players.filter(p=>p.id!==b.dataset.delp); saveTeam(t); render(); return;}
+  if(b.dataset.delc){t.coaches=(t.coaches||[]).filter(p=>p.id!==b.dataset.delc); saveTeam(t); render(); return;}
   if(b.dataset.delpay!==undefined){t.payments.splice(Number(b.dataset.delpay),1); saveTeam(t); render(); return;}
   if(b.id==="btnPay"){const a=Number($("#payAmt").value); if(!a) return;
     t.payments=t.payments||[]; t.payments.push({amount:a,method:$("#payMethod").value,at:today()}); saveTeam(t); render(); return;}
@@ -451,6 +466,9 @@ document.addEventListener("submit",e=>{
   if(f.id==="addPlayer"){const t=cur(); const name=$("#newPName").value.trim(); if(!t||!name) return;
     t.players=t.players||[]; t.players.push({id:uid(),name,year:$("#newPYear").value||"",late:S.org});
     saveTeam(t); render(); $("#newPName").focus(); return;}
+  if(f.id==="addCoach"){const t=cur(); const name=$("#newCName").value.trim(); if(!t||!name) return;
+    t.coaches=t.coaches||[]; t.coaches.push({id:uid(),name,phone:$("#newCPhone").value.trim()});
+    saveTeam(t); render(); $("#newCName").focus(); return;}
   if(f.id==="setForm"){S.settings={name:$("#sfName").value.trim()||"Tournament",org:$("#sfOrg").value.trim(),teamFee:Number($("#sfTeam").value)||0,playerFee:Number($("#sfPlayer").value)||0};
     S.view="detail"; saveSettings(); return;}
   if(f.id==="teamForm"){
@@ -479,7 +497,7 @@ function sample(){
            ["Jack Lind","Viggo Nord","Milo Falk","Otto Borg","Sixten Ek","Frans Wik","Ludvig Sund","Adrian Kvist","Malte Rosén","Harry Björk","Yusuf Ali","Kevin Strand"]];
   const mk=(names,y)=>names.map((n,i)=>({id:y+"-"+(i+1),name:n,year:String(y),late:false}));
   S.teams=[
-    {id:"yfc2014",name:"Youth FC 2014",age:"P2014",leader:"",phone:"",players:mk(P[0],2014),payments:[{amount:3850,method:"Bank transfer",note:"Team fee",at:""},{amount:960,method:"Swish",note:"Player fees, 12 players",at:""}]},
+    {id:"yfc2014",name:"Youth FC 2014",age:"P2014",leader:"",phone:"",players:mk(P[0],2014),coaches:[{id:"c14",name:"Johan Berg",phone:"070-111 22 33"}],payments:[{amount:3850,method:"Bank transfer",note:"Team fee",at:""},{amount:960,method:"Swish",note:"Player fees, 12 players",at:""}]},
     {id:"yfc2015",name:"Youth FC 2015",age:"P2015",leader:"",phone:"",players:mk(P[1],2015),payments:[{amount:3850,method:"Bank transfer",note:"Team fee",at:""},{amount:480,method:"Swish",note:"Player fees, 6 players",at:""}]},
     {id:"yfc2016",name:"Youth FC 2016",age:"P2016",leader:"",phone:"",players:mk(P[2],2016),payments:[{amount:3850,method:"Bank transfer",note:"Team fee",at:""}]}
   ];
