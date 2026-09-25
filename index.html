@@ -163,6 +163,25 @@ textarea{width:100%;resize:vertical}
 .sortbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;font-size:13px;color:var(--muted)}
 .sortbar button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:13px;color:var(--muted)}
 .sortbar button[aria-pressed=true]{background:var(--pitch);color:var(--pitch-ink);border-color:var(--pitch)}
+.grid.solo{grid-template-columns:1fr}
+.grid.solo > section[aria-label="Teams"]{display:none}
+.welcome{padding:36px 22px;text-align:center;display:grid;gap:14px;justify-items:center}
+.welcome img{width:96px;height:96px}
+.welcome h2{font-size:34px}
+.welcome p{margin:0;color:var(--muted);max-width:52ch}
+.welcome .facts{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.welcome .facts span{background:var(--surface-2);border-radius:999px;padding:5px 12px;font-size:14px;font-weight:600}
+.btn.hero{font-family:"Barlow Condensed",sans-serif;font-size:24px;letter-spacing:.04em;text-transform:uppercase;padding:14px 34px;border-radius:10px;border-bottom:4px solid var(--gold)}
+.stepper{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+.stepper span{font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.stepper span.done{background:var(--good-soft);color:var(--good)}
+.stepper span.on{background:var(--pitch);color:var(--pitch-ink)}
+.regrows{display:grid;gap:8px;margin-bottom:10px}
+.regrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.regrow input[type=text],.regrow input[type=number],.regrow input[type=date]{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+.regrow .no{width:70px}
+.regrow .nm{flex:1 1 170px}
+.regrow .dt{width:160px}
 .starbtn{border:1px solid var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
 .feeboxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px}
 .feebox{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--surface)}
@@ -260,7 +279,7 @@ img{max-width:100%}
     <div class="stat"><div class="lbl">Still to collect</div><div class="val num" id="sOwe">0 kr</div></div>
   </section>
 
-  <div class="grid">
+  <div class="grid" id="mainGrid">
     <section class="panel" aria-label="Teams">
       <div class="list-head">
         <input type="text" id="search" placeholder="Search team or leader" aria-label="Search teams">
@@ -277,7 +296,7 @@ img{max-width:100%}
 
     <section class="panel" id="right" aria-live="polite"></section>
   </div>
-  <p class="foot">Each team pays the team fee plus the player fee for every player on its list. Payments cover the team fee first, then player fees. Players added at the desk are charged automatically.</p>
+  <p class="foot">Each team pays the team fee plus the player fee for every player on its list. Green dot = paid, red dot = not paid. Payments are made by Swish.</p>
   </div>
 </div>
 
@@ -322,8 +341,8 @@ function pill(t,c){
 }
 
 /* ---------- persistence (Supabase) ---------- */
-function toRow(t){return {id:t.id,name:t.name||"",age:t.age||"",leader:t.leader||"",phone:t.phone||"",players:t.players||[],coaches:t.coaches||[],payments:t.payments||[],class_name:t.cls||"",created_at:t.createdAt||Date.now()};}
-function fromRow(r){return {id:r.id,name:r.name,age:r.age,leader:r.leader,phone:r.phone,players:r.players||[],coaches:r.coaches||[],payments:r.payments||[],cls:r.class_name||"",createdAt:r.created_at};}
+function toRow(t){return {id:t.id,name:t.name||"",age:t.age||"",leader:t.leader||"",phone:t.phone||"",players:t.players||[],coaches:t.coaches||[],payments:t.payments||[],class_name:t.cls||"",registered:!!t.registered,created_at:t.createdAt||Date.now()};}
+function fromRow(r){return {id:r.id,name:r.name,age:r.age,leader:r.leader,phone:r.phone,players:r.players||[],coaches:r.coaches||[],payments:r.payments||[],cls:r.class_name||"",registered:!!r.registered,createdAt:r.created_at};}
 function saveTeam(t){
   if(!live){render();return;}
   sb.from("teams").upsert(toRow(t)).then(({error})=>{ if(error) showErr(error); });
@@ -355,6 +374,7 @@ function render(){
   $("#sPlayers").textContent=listed; $("#sPlayersSub").textContent=late?`${late} added at the desk`:"all on registered lists";
   $("#sPaid").textContent=kr(paid); $("#sDue").textContent=`of ${kr(due)} total`;
   const so=$("#sOwe"); so.textContent=kr(owe); so.classList.toggle("bad",owe>0);
+  $("#mainGrid").classList.toggle("solo",!S.org);
   renderList(); renderRight();
 }
 function renderList(){
@@ -376,6 +396,7 @@ function renderRight(){
   if(S.view==="add"||S.view==="edit") return renderTeamForm(r);
   if(S.view==="settings") return renderSettings(r);
   const t=S.teams.find(x=>x.id===S.sel);
+  if(!S.org&&t&&!t.registered) return S.view==="register"?renderRegister(r,t):renderWelcome(r,t);
   if(!t&&!S.org){r.innerHTML=`<div class="detail"><h2>No team yet</h2><p class="meta" style="color:var(--muted)">Your account isn't linked to a team. Contact the Nordic Cup organisers and they'll link you to your team.</p></div>`;return;}
   if(!t){r.innerHTML=`<div class="detail"><h2>Pick a team</h2><p class="meta" style="color:var(--muted)">Choose a team on the left to see what they have paid and what is left. Add any player who isn't on the list, and record payments as they come in.</p></div>`;return;}
   const c=calc(t), st=S.settings;
@@ -391,6 +412,7 @@ function renderRight(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${pill(t,c)}<button class="btn small" id="btnEdit" type="button">Edit team</button></div>
     </div>
     ${flag}
+    ${S.justReg?`<div class="flag clear">Registration complete. Below you can see what is paid: the team fee and every player (green = paid, red = not paid).</div>`:""}
     <div class="feeboxes num">
       <div class="feebox"><div class="lbl">Team fee</div>
         <div class="big ${teamCls}">${teamCls==="ok"?"Paid":teamCls==="part"?kr(c.tf-c.teamPaid)+" left":"Not paid"}</div>
@@ -460,6 +482,57 @@ function renderRight(){
     <p class="hint">Coaches don't pay and don't count towards the bill. One coach is the main responsible contact for the team.</p>
   </div>`;
 }
+function regInit(t){
+  const pl=(t.players||[]).map(p=>({id:p.id,no:p.no||"",name:p.name||"",born:p.born||""}));
+  const target=Math.min(MAX_PLAYERS,Math.max(5,pl.length+1)); while(pl.length<target) pl.push({no:"",name:"",born:""});
+  const co=(t.coaches||[]).map(c=>({id:c.id,name:c.name||"",phone:c.phone||"",main:!!c.main}));
+  if(!co.length) co.push({name:"",phone:"",main:true});
+  return {players:pl,coaches:co};
+}
+function renderWelcome(r,t){
+  const st=S.settings;
+  r.innerHTML=`<div class="welcome">
+    <img src="badge.png" alt="">
+    <h2>Welcome, ${esc(t.name)}</h2>
+    <div class="facts"><span>${esc(t.age||"")}</span><span>Max ${MAX_PLAYERS} players</span><span>Max ${MAX_COACHES} coaches</span></div>
+    <p>Register your players and coaches for Nordic Cup 2027. The team fee is ${kr(st.teamFee)} and each player costs ${kr(st.playerFee)}. Coaches are free.</p>
+    <button class="btn primary hero" type="button" id="btnStartReg">Register our team</button>
+  </div>`;
+}
+function regCounts(){
+  const st=S.settings, n=S.reg.players.filter(p=>p.name.trim()).length;
+  const set=(id,v)=>{const e=$("#"+id); if(e) e.textContent=v;};
+  set("regN",n); set("regPCount",n+" of "+MAX_PLAYERS); set("regPF",kr(n*st.playerFee)); set("regTot",kr(Number(st.teamFee)+n*st.playerFee));
+}
+function renderRegister(r,t){
+  const R=S.reg, st=S.settings;
+  r.innerHTML=`<div class="detail">
+    <h2>Register ${esc(t.name)}</h2><div class="meta" style="color:var(--muted)">${esc(t.age||"")}</div>
+    <div class="stepper"><span class="done">1 · Team</span><span class="on">2 · Players and coaches</span><span>3 · Overview</span></div>
+    <div class="sec-h"><h3>Players</h3><span class="meta num" id="regPCount"></span></div>
+    <div class="regrows">${R.players.map((p,i)=>`<div class="regrow">
+      <input type="number" class="no" min="1" max="99" placeholder="No." data-rp="${i}" data-k="no" value="${esc(p.no)}" aria-label="Shirt number">
+      <input type="text" class="nm" placeholder="Player name" data-rp="${i}" data-k="name" value="${esc(p.name)}" aria-label="Player name">
+      <input type="date" class="dt" data-rp="${i}" data-k="born" value="${esc(p.born)}" aria-label="Date of birth">
+      <button class="xbtn" type="button" data-rpdel="${i}" aria-label="Remove row">×</button></div>`).join("")}</div>
+    ${R.players.length<MAX_PLAYERS?`<button class="btn small" type="button" id="regAddP">+ Add player</button>`:`<p class="hint">Maximum ${MAX_PLAYERS} players.</p>`}
+    <div class="sec-h"><h3>Coaches</h3><span class="meta">max ${MAX_COACHES} · choose the main responsible</span></div>
+    <div class="regrows">${R.coaches.map((c,i)=>`<div class="regrow">
+      <input type="text" class="nm" placeholder="Coach name" data-rc="${i}" data-k="name" value="${esc(c.name)}" aria-label="Coach name">
+      <input type="text" placeholder="Phone" data-rc="${i}" data-k="phone" value="${esc(c.phone)}" aria-label="Coach phone">
+      <label class="pick"><input type="radio" name="regMain" data-rcmain="${i}" ${c.main?"checked":""}>Main responsible</label>
+      <button class="xbtn" type="button" data-rcdel="${i}" aria-label="Remove row">×</button></div>`).join("")}</div>
+    ${R.coaches.length<MAX_COACHES?`<button class="btn small" type="button" id="regAddC">+ Add coach</button>`:""}
+    <div class="paysum" style="margin-top:18px">
+      <div class="row"><span>Team fee</span><span class="num">${kr(st.teamFee)}</span></div>
+      <div class="row"><span>Players: <b id="regN"></b> × ${kr(st.playerFee)}</span><span class="num" id="regPF"></span></div>
+      <div class="row tot"><span>Total for the team</span><span class="num" id="regTot"></span></div>
+    </div>
+    <div class="msg err" id="regErr" hidden style="margin-top:12px"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn primary big" type="button" id="regDone">Complete registration</button><button class="btn" type="button" id="regBack">Back</button></div>
+  </div>`;
+  regCounts();
+}
 function renderTeamForm(r){
   const t = S.view==="edit" ? S.teams.find(x=>x.id===S.sel) : null;
   const names = t ? (t.players||[]).filter(p=>!p.late).map(p=>(p.no?p.no+" ":"")+p.name+(p.born||p.year?", "+(p.born||p.year):"")).join("\n") : "";
@@ -515,6 +588,24 @@ document.addEventListener("click",e=>{
   if(b.dataset.id){if(S.sel!==b.dataset.id){S.selP.clear();S.selFee=false;S.editP=null;} S.sel=b.dataset.id;S.view="detail";S.confirmDel=false;render();
     if(matchMedia("(max-width:860px)").matches) $("#right").scrollIntoView({behavior:"smooth",block:"start"}); return;}
   if(b.dataset.f){S.filter=b.dataset.f;document.querySelectorAll(".filters button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderList();return;}
+  if(b.id==="btnStartReg"){const t=cur(); if(!t) return; S.reg=regInit(t); S.view="register"; renderRight(); return;}
+  if(b.id==="regBack"){S.view="detail"; renderRight(); return;}
+  if(b.id==="regAddP"&&S.reg.players.length<MAX_PLAYERS){S.reg.players.push({no:"",name:"",born:""}); renderRight(); return;}
+  if(b.id==="regAddC"&&S.reg.coaches.length<MAX_COACHES){S.reg.coaches.push({name:"",phone:"",main:!S.reg.coaches.length}); renderRight(); return;}
+  if(b.dataset.rpdel!==undefined){S.reg.players.splice(+b.dataset.rpdel,1); if(!S.reg.players.length) S.reg.players.push({no:"",name:"",born:""}); renderRight(); return;}
+  if(b.dataset.rcdel!==undefined){S.reg.coaches.splice(+b.dataset.rcdel,1); if(!S.reg.coaches.length) S.reg.coaches.push({name:"",phone:"",main:true}); if(!S.reg.coaches.some(c=>c.main)) S.reg.coaches[0].main=true; renderRight(); return;}
+  if(b.id==="regDone"){const t=cur(); if(!t) return; const err=m=>{const e=$("#regErr"); e.hidden=false; e.textContent=m; e.scrollIntoView({block:"center"});};
+    const pl=S.reg.players.filter(p=>p.name.trim()||String(p.no).trim());
+    if(!pl.length) return err("Add at least one player.");
+    const seen=new Set();
+    for(const p of pl){ if(!p.name.trim()) return err("Player number "+p.no+" needs a name."); const n=parseInt(p.no,10); if(!(n>=1&&n<=99)) return err(p.name+" needs a shirt number between 1 and 99."); if(seen.has(n)) return err("Number "+n+" is used twice."); seen.add(n); }
+    if(pl.length>MAX_PLAYERS) return err("A team can have at most "+MAX_PLAYERS+" players.");
+    const co=S.reg.coaches.filter(c=>c.name.trim());
+    if(!co.length) return err("Add at least one coach.");
+    if(!co.some(c=>c.main)) co[0].main=true;
+    t.players=pl.map(p=>({id:p.id||uid(),no:String(parseInt(p.no,10)),name:p.name.trim(),born:p.born||"",year:(p.born||"").slice(0,4),late:false}));
+    t.coaches=co.map(c=>({id:c.id||uid(),name:c.name.trim(),phone:(c.phone||"").trim(),main:!!c.main}));
+    t.registered=true; S.justReg=true; S.view="detail"; saveTeam(t); render(); scrollTo(0,0); return;}
   if(b.id==="btnAdd"){S.view="add";S.confirmDel=false;render();$("#tfName").focus();return;}
   if(b.id==="btnSettings"){S.view="settings";render();return;}
   if(b.id==="btnEdit"){S.view="edit";S.confirmDel=false;render();return;}
@@ -574,7 +665,10 @@ document.addEventListener("submit",e=>{
 });
 $("#search").addEventListener("input",e=>{S.q=e.target.value;renderList();});
 document.addEventListener("click",e=>{const x=e.target.closest("[data-editp]"); if(x){S.editP=x.dataset.editp; renderRight(); setTimeout(()=>$("#epName")?.focus(),0);}});
-document.addEventListener("change",e=>{const x=e.target; if(x.id==="catFilter"){S.cat=x.value; renderList(); return;} if(x.dataset&&x.dataset.selp){x.checked?S.selP.add(x.dataset.selp):S.selP.delete(x.dataset.selp); renderRight();} else if(x.id==="selFee"){S.selFee=x.checked; renderRight();}});
+document.addEventListener("input",e=>{const x=e.target;
+  if(x.dataset&&x.dataset.rp!==undefined){S.reg.players[+x.dataset.rp][x.dataset.k]=x.value; regCounts();}
+  else if(x.dataset&&x.dataset.rc!==undefined){S.reg.coaches[+x.dataset.rc][x.dataset.k]=x.value;}});
+document.addEventListener("change",e=>{const x=e.target; if(x.dataset&&x.dataset.rcmain!==undefined){S.reg.coaches.forEach((c,i)=>c.main=(i===+x.dataset.rcmain)); return;} if(x.id==="catFilter"){S.cat=x.value; renderList(); return;} if(x.dataset&&x.dataset.selp){x.checked?S.selP.add(x.dataset.selp):S.selP.delete(x.dataset.selp); renderRight();} else if(x.id==="selFee"){S.selFee=x.checked; renderRight();}});
 
 /* ---------- boot ---------- */
 function sample(){
