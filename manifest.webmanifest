@@ -1,0 +1,29 @@
+{
+  "name": "Nordic Cup 2027",
+  "short_name": "Nordic Cup",
+  "description": "Team and player registrations for Nordic Cup 2027, powered by YOUacademy.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#042B20",
+  "theme_color": "#042B20",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
