@@ -164,6 +164,7 @@ textarea{width:100%;resize:vertical}
 .sortbar button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:13px;color:var(--muted)}
 .sortbar button[aria-pressed=true]{background:var(--pitch);color:var(--pitch-ink);border-color:var(--pitch)}
 .grid.solo{grid-template-columns:1fr}
+#statsBar[hidden]+.grid{margin-top:16px}
 .grid.solo > section[aria-label="Teams"]{display:none}
 .welcome{padding:36px 22px;text-align:center;display:grid;gap:14px;justify-items:center}
 .welcome img{width:96px;height:96px}
@@ -272,7 +273,7 @@ img{max-width:100%}
   </section>
   <div id="app" hidden>
 
-  <section class="stats" aria-label="Tournament totals">
+  <section class="stats" id="statsBar" aria-label="Tournament totals">
     <div class="stat"><div class="lbl">Teams paid in full</div><div class="val num" id="sTeams">0 / 0</div></div>
     <div class="stat"><div class="lbl">Players</div><div class="val num" id="sPlayers">0</div><div class="sub" id="sPlayersSub"></div></div>
     <div class="stat"><div class="lbl">Collected</div><div class="val num" id="sPaid">0 kr</div><div class="sub" id="sDue"></div></div>
@@ -296,7 +297,7 @@ img{max-width:100%}
 
     <section class="panel" id="right" aria-live="polite"></section>
   </div>
-  <p class="foot">Each team pays the team fee plus the player fee for every player on its list. Green dot = paid, red dot = not paid. Payments are made by Swish.</p>
+  <p class="foot" id="footNote">Each team pays the team fee plus the player fee for every player on its list. Green dot = paid, red dot = not paid. Payments are made by Swish.</p>
   </div>
 </div>
 
@@ -375,6 +376,8 @@ function render(){
   $("#sPaid").textContent=kr(paid); $("#sDue").textContent=`of ${kr(due)} total`;
   const so=$("#sOwe"); so.textContent=kr(owe); so.classList.toggle("bad",owe>0);
   $("#mainGrid").classList.toggle("solo",!S.org);
+  {const ct=S.teams.find(x=>x.id===S.sel); const pre=!S.org&&!!ct&&!ct.registered;
+   $("#statsBar").hidden=pre; $("#footNote").hidden=pre; document.querySelectorAll(".fee-chip").forEach(e=>e.hidden=pre);}
   renderList(); renderRight();
 }
 function renderList(){
@@ -495,7 +498,7 @@ function renderWelcome(r,t){
     <img src="badge.png" alt="">
     <h2>Welcome, ${esc(t.name)}</h2>
     <div class="facts"><span>${esc(t.age||"")}</span><span>Max ${MAX_PLAYERS} players</span><span>Max ${MAX_COACHES} coaches</span></div>
-    <p>Register your players and coaches for Nordic Cup 2027. The team fee is ${kr(st.teamFee)} and each player costs ${kr(st.playerFee)}. Coaches are free.</p>
+    <p>Register your players and coaches for Nordic Cup 2027. When your team is registered you will see your fees and what is paid.</p>
     <button class="btn primary hero" type="button" id="btnStartReg">Register our team</button>
   </div>`;
 }
@@ -523,11 +526,6 @@ function renderRegister(r,t){
       <label class="pick"><input type="radio" name="regMain" data-rcmain="${i}" ${c.main?"checked":""}>Main responsible</label>
       <button class="xbtn" type="button" data-rcdel="${i}" aria-label="Remove row">×</button></div>`).join("")}</div>
     ${R.coaches.length<MAX_COACHES?`<button class="btn small" type="button" id="regAddC">+ Add coach</button>`:""}
-    <div class="paysum" style="margin-top:18px">
-      <div class="row"><span>Team fee</span><span class="num">${kr(st.teamFee)}</span></div>
-      <div class="row"><span>Players: <b id="regN"></b> × ${kr(st.playerFee)}</span><span class="num" id="regPF"></span></div>
-      <div class="row tot"><span>Total for the team</span><span class="num" id="regTot"></span></div>
-    </div>
     <div class="msg err" id="regErr" hidden style="margin-top:12px"></div>
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn primary big" type="button" id="regDone">Complete registration</button><button class="btn" type="button" id="regBack">Back</button></div>
   </div>`;
