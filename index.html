@@ -159,6 +159,23 @@ textarea{width:100%;resize:vertical}
 .login input{width:100%}
 .msg{font-size:14px;padding:8px 10px;border-radius:6px;background:var(--good-soft);color:var(--good)}
 .msg.err{background:var(--bad-soft);color:var(--bad)}
+.auth{min-height:100vh;display:grid;place-items:center;padding-block:32px}
+.auth-inner{width:100%;max-width:420px;display:grid;gap:22px}
+.auth-brand{text-align:center;color:var(--brand-ink);display:grid;justify-items:center;gap:6px}
+.auth-brand img{width:132px;height:132px;filter:drop-shadow(0 4px 14px rgba(0,0,0,.4))}
+.auth-brand h1{font-size:40px;line-height:1;text-transform:uppercase;letter-spacing:.05em;color:var(--brand-ink)}
+.auth-card{background:var(--surface);border-radius:12px;border-top:4px solid var(--gold);box-shadow:var(--shadow);padding:22px;display:grid;gap:14px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface-2);border-radius:8px;padding:4px;gap:4px}
+.tabs button{border:0;background:transparent;border-radius:6px;padding:9px;font-weight:600;color:var(--muted)}
+.tabs button[aria-selected=true]{background:var(--pitch);color:var(--pitch-ink)}
+#authForm{display:grid;gap:12px}
+#authForm h2{font-size:26px}
+#authForm p{margin:0;color:var(--muted)}
+#authForm label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+#authForm input{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:100%;font-size:16px;font-weight:400;color:var(--ink);min-width:0}
+#authForm .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn.big{padding:12px;font-size:16px}
+#authForm .linkbtn{justify-self:center;color:var(--pitch)}
 body{margin:0}
 [hidden]{display:none!important}
 img{max-width:100%}
@@ -167,7 +184,7 @@ img{max-width:100%}
 <body>
 
 <div class="wrap">
-  <header class="top">
+  <header class="top" id="topBar" hidden>
     <div class="brand">
       <img src="badge.png" alt="Nordic Cup Gothenburg logo">
       <div>
@@ -184,16 +201,17 @@ img{max-width:100%}
     </div>
   </header>
   <div class="notice" id="modeNote" hidden>Demo mode: changes are not saved. Add your Supabase keys in config.js to save data and share it between volunteers.</div>
-  <section class="panel login" id="loginBox" hidden>
-    <h2>Log in</h2>
-    <p>Enter your email and we'll send you a login link. Only volunteers the organisers have invited can log in.</p>
-    <form id="loginForm" style="display:grid;gap:10px">
-      <input type="text" inputmode="email" autocomplete="email" id="loginEmail" placeholder="you@example.com" aria-label="Email" required>
-      <button class="btn primary" type="submit">Send login link</button>
-    </form>
-    <div class="msg" id="loginMsg" hidden></div>
+  <section class="auth" id="authScreen" hidden>
+    <div class="auth-inner">
+      <div class="auth-brand"><img src="badge.png" alt="Nordic Cup Gothenburg logo"><h1>Nordic Cup 2027</h1><div class="powered">Powered by YOUacademy</div></div>
+      <div class="auth-card">
+        <div class="tabs" id="authTabs" role="tablist"><button type="button" role="tab" data-auth="login">Log in</button><button type="button" role="tab" data-auth="signup">Sign up</button></div>
+        <form id="authForm"></form>
+        <div class="msg" id="authMsg" hidden></div>
+      </div>
+    </div>
   </section>
-  <div id="app">
+  <div id="app" hidden>
 
   <section class="stats" aria-label="Tournament totals">
     <div class="stat"><div class="lbl">Teams paid in full</div><div class="val num" id="sTeams">0 / 0</div></div>
@@ -226,7 +244,7 @@ img{max-width:100%}
 <script src="config.js"></script>
 <script>
 (function(){
-const S = {settings:{name:"Nordic Cup 2027",org:"Youacademy",teamFee:3850,playerFee:80}, teams:[], sel:null, view:"detail", filter:"all", q:"", confirmDel:false};
+const S = {settings:{name:"Nordic Cup 2027",org:"Youacademy",teamFee:3850,playerFee:80}, teams:[], org:false, sel:null, view:"detail", filter:"all", q:"", confirmDel:false};
 let sb = null, live = false;
 const $ = s => document.querySelector(s);
 const kr = n => (Math.round(n)||0).toLocaleString("sv-SE") + " kr";
@@ -278,6 +296,7 @@ function showErr(e){
 function render(){
   const st=S.settings;
   $("#tName").textContent=st.name||"Tournament"; $("#tOrg").textContent=st.org?("Powered by "+st.org):"";
+  $("#btnSettings").hidden=!S.org; $("#btnAdd").hidden=!S.org;
   $("#fTeam").textContent=kr(st.teamFee); $("#fPlayer").textContent=kr(st.playerFee);
   let full=0,listed=0,late=0,paid=0,due=0,owe=0;
   S.teams.forEach(t=>{const c=calc(t); if(c.bal<=0) full++; listed+=c.total; late+=c.late; paid+=c.paid; due+=c.due; if(c.bal>0) owe+=c.bal;});
@@ -305,6 +324,7 @@ function renderRight(){
   if(S.view==="add"||S.view==="edit") return renderTeamForm(r);
   if(S.view==="settings") return renderSettings(r);
   const t=S.teams.find(x=>x.id===S.sel);
+  if(!t&&!S.org){r.innerHTML=`<div class="detail"><h2>No team yet</h2><p class="meta" style="color:var(--muted)">Your account isn't linked to a team. Contact the Nordic Cup organisers and they'll link you to your team.</p></div>`;return;}
   if(!t){r.innerHTML=`<div class="detail"><h2>Pick a team</h2><p class="meta" style="color:var(--muted)">Choose a team on the left to see what they have paid and what is left. Add any player who isn't on the list, and record payments as they come in.</p></div>`;return;}
   const c=calc(t), st=S.settings;
   const flag = c.late ? `<div class="flag">Registered with ${c.registered} players, now ${c.total} on the list: ${c.late} added at the desk = ${c.late} × ${kr(c.pf)} = <b class="num">${kr(c.late*c.pf)}</b> extra.</div>` : "";
@@ -338,13 +358,13 @@ function renderRight(){
         <tr><td>Paid</td><td>− ${kr(c.paid)}</td></tr>
         <tr class="bal ${c.bal>0?"owe":"ok"}"><td>${c.bal>0?"Left to pay":c.bal<0?"Overpaid":"Balance"}</td><td>${kr(Math.abs(c.bal))}</td></tr>
       </table>
-      <div class="payrow">
+      ${S.org?`<div class="payrow">
         <label for="payAmt" style="font-weight:600">Record payment</label>
         <input type="number" id="payAmt" min="0" step="10" value="${Math.max(c.bal,0)}" aria-label="Amount in kronor">
         <select id="payMethod" aria-label="Payment method"><option>Swish</option><option>Bank transfer</option><option>Cash</option><option>Card</option><option>Invoice</option></select>
         <button class="btn primary small" id="btnPay" type="button">Add payment</button>
-      </div>
-      ${pays.length?`<div class="paylog">${pays.map((p,i)=>`${kr(p.amount)} · ${esc(p.method)}${p.note?" · "+esc(p.note):""}${p.at?" · "+esc(p.at):""} <button class="xbtn" data-delpay="${i}" type="button" aria-label="Remove payment">×</button>`).join("<br>")}</div>`:""}
+      </div>`:`<div class="payrow"><span>Payments are recorded by the Nordic Cup organisers when they receive them.</span></div>`}
+      ${pays.length?`<div class="paylog">${pays.map((p,i)=>`${kr(p.amount)} · ${esc(p.method)}${p.note?" · "+esc(p.note):""}${p.at?" · "+esc(p.at):""} ${S.org?'<button class="xbtn" data-delpay="'+i+'" type="button" aria-label="Remove payment">×</button>':""}`).join("<br>")}</div>`:""}
     </div>
 
     <div class="sec-h"><h3>Players</h3><span class="meta num">${c.total} on the list</span></div>
@@ -355,11 +375,11 @@ function renderRight(){
       </li>`).join("")||`<li class="empty" style="justify-content:center">No players on the list yet.</li>`}
     </ul>
     <form class="addp" id="addPlayer" autocomplete="off">
-      <input type="text" id="newPName" placeholder="Player not on the list" aria-label="Player name" required>
+      <input type="text" id="newPName" placeholder="${S.org?"Player not on the list":"Player name"}" aria-label="Player name" required>
       <input type="number" id="newPYear" placeholder="Born" min="2000" max="2025" aria-label="Birth year">
       <button class="btn primary" type="submit">Add player</button>
     </form>
-    <p class="hint">A player added here is marked "Added at desk" and ${kr(c.pf)} is added to the team's bill.</p>
+    <p class="hint">${S.org?`A player added here is marked "Added at desk" and ${kr(c.pf)} is added to the team's bill.`:`Each player on the list adds ${kr(c.pf)} to your team's bill.`}</p>
   </div>`;
 }
 function renderTeamForm(r){
@@ -382,7 +402,7 @@ function renderTeamForm(r){
     <div class="actions">
       <button class="btn primary" type="submit">${t?"Save changes":"Add team"}</button>
       <button class="btn" type="button" id="tfCancel">Cancel</button>
-      ${t?`<span style="flex:1"></span><button class="btn danger" type="button" id="tfDel">${S.confirmDel?"Yes, delete this team":"Delete team"}</button>`:""}
+      ${t&&S.org?`<span style="flex:1"></span><button class="btn danger" type="button" id="tfDel">${S.confirmDel?"Yes, delete this team":"Delete team"}</button>`:""}
     </div>
   </form>`;
 }
@@ -429,7 +449,7 @@ document.addEventListener("submit",e=>{
   e.preventDefault();
   const f=e.target;
   if(f.id==="addPlayer"){const t=cur(); const name=$("#newPName").value.trim(); if(!t||!name) return;
-    t.players=t.players||[]; t.players.push({id:uid(),name,year:$("#newPYear").value||"",late:true});
+    t.players=t.players||[]; t.players.push({id:uid(),name,year:$("#newPYear").value||"",late:S.org});
     saveTeam(t); render(); $("#newPName").focus(); return;}
   if(f.id==="setForm"){S.settings={name:$("#sfName").value.trim()||"Tournament",org:$("#sfOrg").value.trim(),teamFee:Number($("#sfTeam").value)||0,playerFee:Number($("#sfPlayer").value)||0};
     S.view="detail"; saveSettings(); return;}
@@ -474,32 +494,69 @@ async function loadAll(){
   if(S.view==="edit"||S.view==="add"||S.view==="settings"){ renderList(); return; } // don't wipe a form being typed
   render();
 }
-let reloadTimer=null;
+let reloadTimer=null, recovering=false, started=false, authMode="login";
 function scheduleReload(){clearTimeout(reloadTimer);reloadTimer=setTimeout(loadAll,300);}
-function showLogin(on){ $("#loginBox").hidden=!on; $("#app").hidden=on; $("#btnOut").hidden=on; $("#btnSettings").hidden=on; }
-let started=false;
-function startLive(){
-  if(started) return; started=true; live=true; showLogin(false); loadAll();
+function showAuth(on){ $("#authScreen").hidden=!on; $("#topBar").hidden=on; $("#app").hidden=on; $("#btnOut").hidden=on; }
+async function startLive(){
+  if(started) return; started=true; live=true; showAuth(false);
+  const {data:isOrg}=await sb.rpc("is_organiser"); S.org=!!isOrg;
+  await loadAll();
   sb.channel("desk").on("postgres_changes",{event:"*",schema:"public",table:"teams"},scheduleReload)
     .on("postgres_changes",{event:"*",schema:"public",table:"settings"},scheduleReload).subscribe();
 }
-$("#loginForm").addEventListener("submit",async e=>{
+const base=location.origin+location.pathname;
+function setMsg(msg,isErr){const m=$("#authMsg"); m.hidden=!msg; m.className="msg"+(isErr?" err":""); m.textContent=msg||"";}
+function renderAuth(mode,msg,isErr){
+  authMode=mode;
+  document.querySelectorAll("#authTabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.auth===mode));
+  $("#authTabs").hidden=!(mode==="login"||mode==="signup");
+  const F=(id,label,type,extra)=>`<label>${label}<input type="${type}" id="${id}" ${extra||""}></label>`;
+  const f=$("#authForm");
+  if(mode==="login") f.innerHTML=`<h2>Log in</h2>${F("aEmail","Email","email",'autocomplete="username" required')}${F("aPass","Password","password",'autocomplete="current-password" required')}<button class="btn primary big" type="submit">Log in</button><button type="button" class="linkbtn" data-auth="forgot">Forgot password?</button>`;
+  if(mode==="signup") f.innerHTML=`<h2>Sign up your team</h2><p>Create an account to register your team, add your players and see what you owe.</p>${F("aName","Your name","text",'autocomplete="name" required')}${F("aTeam","Team name","text",'required placeholder="e.g. Youth FC 2015"')}<div class="row2">${F("aAge","Age group","text",'placeholder="e.g. P2015"')}${F("aPhone","Phone","tel",'autocomplete="tel"')}</div>${F("aEmail","Email","email",'autocomplete="username" required')}${F("aPass","Password (at least 6 characters)","password",'autocomplete="new-password" minlength="6" required')}<button class="btn primary big" type="submit">Create account</button>`;
+  if(mode==="forgot") f.innerHTML=`<h2>Forgot password</h2><p>Enter your email and we'll send you a link to choose a new password.</p>${F("aEmail","Email","email",'autocomplete="username" required')}<button class="btn primary big" type="submit">Send reset link</button><button type="button" class="linkbtn" data-auth="login">Back to log in</button>`;
+  if(mode==="reset") f.innerHTML=`<h2>Choose a password</h2><p>Pick the password you'll use to log in from now on.</p>${F("aPass","New password (at least 6 characters)","password",'autocomplete="new-password" minlength="6" required')}${F("aPass2","Repeat password","password",'autocomplete="new-password" minlength="6" required')}<button class="btn primary big" type="submit">Save password</button>`;
+  setMsg(msg,isErr);
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-auth]"); if(b) renderAuth(b.dataset.auth);});
+$("#authForm").addEventListener("submit",async e=>{
   e.preventDefault();
-  const m=$("#loginMsg"); m.hidden=false; m.className="msg"; m.textContent="Sending…";
-  const {error}=await sb.auth.signInWithOtp({email:$("#loginEmail").value.trim(),options:{shouldCreateUser:false,emailRedirectTo:location.href.split("#")[0]}});
-  if(error){m.className="msg err"; m.textContent="Couldn't send the link. Check the address, or ask the organisers to invite you.";}
-  else m.textContent="Check your email and tap the login link.";
+  const v=id=>($("#"+id)?.value||"").trim();
+  const btn=e.target.querySelector("button[type=submit]"); btn.disabled=true; setMsg("");
+  try{
+    if(authMode==="login"){
+      const {error}=await sb.auth.signInWithPassword({email:v("aEmail"),password:$("#aPass").value});
+      if(error) setMsg("Wrong email or password. Try again, or use Forgot password.",true);
+    } else if(authMode==="signup"){
+      const {data,error}=await sb.auth.signUp({email:v("aEmail"),password:$("#aPass").value,options:{emailRedirectTo:base,data:{full_name:v("aName"),team_name:v("aTeam"),age:v("aAge"),phone:v("aPhone")}}});
+      if(error) setMsg(/registered|exists/i.test(error.message)?"That email already has an account. Log in instead, or use Forgot password.":"Couldn't create the account: "+error.message,true);
+      else if(!data.session) renderAuth("login","Account created. Check your email to confirm it, then log in.");
+    } else if(authMode==="forgot"){
+      const {error}=await sb.auth.resetPasswordForEmail(v("aEmail"),{redirectTo:base});
+      if(error) setMsg("Couldn't send the link right now. Wait a few minutes and try again.",true);
+      else setMsg("If that email has an account, a reset link is on its way. Check your inbox and junk folder.");
+    } else if(authMode==="reset"){
+      if($("#aPass").value!==$("#aPass2").value){setMsg("The two passwords don't match.",true);return;}
+      const {error}=await sb.auth.updateUser({password:$("#aPass").value});
+      if(error){setMsg("Couldn't save the password: "+error.message,true);return;}
+      recovering=false; history.replaceState(null,"",base); startLive();
+    }
+  } finally { if(btn.isConnected) btn.disabled=false; }
 });
-$("#btnOut").addEventListener("click",async()=>{await sb.auth.signOut(); location.reload();});
+$("#btnOut").addEventListener("click",async()=>{await sb.auth.signOut(); location.replace(base);});
 
 const cfg=window.NORDIC_CUP_CONFIG||{};
 if(!cfg.supabaseUrl || !cfg.supabaseAnonKey || cfg.supabaseUrl.includes("YOUR-")){
-  sample(); $("#modeNote").hidden=false; render();
+  S.org=true; sample(); $("#modeNote").hidden=false; $("#topBar").hidden=false; $("#app").hidden=false; render();
 } else {
   sb=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);
-  render(); showLogin(true);
-  sb.auth.getSession().then(({data})=>{ if(data.session) startLive(); });
-  sb.auth.onAuthStateChange((ev,session)=>{ if(session) startLive(); });
+  recovering=/type=(recovery|invite)/.test(location.hash);
+  renderAuth(recovering?"reset":"login"); showAuth(true);
+  sb.auth.onAuthStateChange((ev,session)=>{
+    if(ev==="PASSWORD_RECOVERY"){recovering=true; renderAuth("reset"); showAuth(true); return;}
+    if(session && !recovering) setTimeout(startLive,0);
+  });
+  sb.auth.getSession().then(({data})=>{ if(data.session && !recovering) startLive(); });
 }
 })();
 </script>
