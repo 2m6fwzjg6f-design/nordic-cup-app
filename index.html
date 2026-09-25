@@ -139,6 +139,30 @@ textarea{width:100%;resize:vertical}
 .shirt{display:inline-grid;place-items:center;min-width:30px;height:24px;padding:0 6px;margin-right:6px;border-radius:6px;background:var(--pitch);color:var(--pitch-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px}
 .shirt.none{background:var(--surface-2);color:var(--muted)}
 .addp input.no{width:74px;flex:none}
+.dot{width:11px;height:11px;border-radius:50%;flex:none;display:inline-block;margin-right:8px;vertical-align:middle}
+.dot.paid{background:#1E9E5A;box-shadow:0 0 0 3px rgba(30,158,90,.18)}
+.dot.unpaid{background:#D0342C;box-shadow:0 0 0 3px rgba(208,52,44,.15)}
+.pick{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.pick input{width:20px;height:20px;accent-color:var(--pitch);cursor:pointer}
+.paidtag{font-size:13px;font-weight:600;color:var(--good);white-space:nowrap}
+.paysum{margin-top:10px;border:2px solid var(--pitch);border-radius:8px;overflow:hidden}
+.paysum .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.paysum .row:last-child{border-bottom:0}
+.paysum .tot{background:var(--pitch);color:var(--pitch-ink);font-family:"Barlow Condensed",sans-serif;font-size:22px;font-weight:700}
+.paysum .how{background:var(--surface-2);font-size:14px}
+.paysum .how b{font-variant-numeric:tabular-nums}
+.linkish{background:none;border:0;padding:0;color:var(--pitch);font-weight:600;text-decoration:underline;text-underline-offset:3px;font-size:13px}
+.pn.clickable{cursor:pointer;border-radius:6px}
+.pn.clickable:hover .pname{text-decoration:underline;text-underline-offset:3px}
+.players li.editing{background:var(--pitch-soft)}
+.pedit{display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%}
+.pedit input{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+.pedit .no{width:64px}
+.pedit .nm{flex:1 1 160px}
+.pedit .dt{width:150px}
+.sortbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;font-size:13px;color:var(--muted)}
+.sortbar button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:13px;color:var(--muted)}
+.sortbar button[aria-pressed=true]{background:var(--pitch);color:var(--pitch-ink);border-color:var(--pitch)}
 .starbtn{border:1px solid var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
 .feeboxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px}
 .feebox{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--surface)}
@@ -246,6 +270,7 @@ img{max-width:100%}
         <button type="button" data-f="all" aria-pressed="true">All</button>
         <button type="button" data-f="owe" aria-pressed="false">Owes money</button>
         <button type="button" data-f="ok" aria-pressed="false">Paid in full</button>
+        <select id="catFilter" aria-label="Category" hidden style="padding:3px 8px;font-size:13px"></select>
       </div>
       <ul class="teams" id="teamList"></ul>
     </section>
@@ -260,7 +285,7 @@ img{max-width:100%}
 <script src="config.js"></script>
 <script>
 (function(){
-const S = {settings:{name:"Nordic Cup 2027",org:"Youacademy",teamFee:3850,playerFee:80}, teams:[], org:false, sel:null, view:"detail", filter:"all", q:"", confirmDel:false};
+const S = {settings:{name:"Nordic Cup 2027",org:"Youacademy",teamFee:3850,playerFee:80}, teams:[], org:false, sel:null, selP:new Set(), selFee:false, editP:null, sortP:"no", cat:"", view:"detail", filter:"all", q:"", confirmDel:false};
 let sb = null, live = false;
 const $ = s => document.querySelector(s);
 const kr = n => (Math.round(n)||0).toLocaleString("sv-SE") + " kr";
@@ -272,13 +297,21 @@ function calc(t){
   const st=S.settings, ps=t.players||[], tf=Number(st.teamFee)||0, pf=Number(st.playerFee)||0;
   const registered=ps.filter(p=>!p.late).length, late=ps.filter(p=>p.late).length, total=ps.length;
   const playerDue=pf*total, due=tf+playerDue;
-  const paid=(t.payments||[]).reduce((a,p)=>a+Number(p.amount||0),0);
-  const teamPaid=Math.min(paid,tf);
-  const playerPaid=Math.max(0,Math.min(paid-tf,playerDue));
-  const playersCovered=pf?Math.floor(playerPaid/pf):total;
+  const pays=t.payments||[];
+  const feePaid=pays.some(p=>p.fee);
+  const paidIds=new Set(pays.flatMap(p=>p.players||[]));
+  const playersCovered=ps.filter(p=>paidIds.has(p.id)).length;
+  const teamPaid=feePaid?tf:0, playerPaid=playersCovered*pf, paid=teamPaid+playerPaid;
   const bal=due-paid;
   const status = bal<=0 ? "ok" : "owe";
-  return {registered,late,total,due,paid,bal,status,tf,pf,teamPaid,playerDue,playerPaid,playersCovered};
+  return {registered,late,total,due,paid,bal,status,tf,pf,teamPaid,playerDue,playerPaid,playersCovered,feePaid,paidIds};
+}
+function sortPlayers(list,c){
+  const by={no:(a,b)=>(+a.no||999)-(+b.no||999),
+    name:(a,b)=>(a.name||"").localeCompare(b.name||"","sv"),
+    born:(a,b)=>(a.born||a.year||"9999").localeCompare(b.born||b.year||"9999"),
+    paid:(a,b)=>(c.paidIds.has(a.id)-c.paidIds.has(b.id))||((+a.no||999)-(+b.no||999))};
+  return list.slice().sort(by[S.sortP]||by.no);
 }
 function pill(t,c){
   if(c.bal<0) return `<span class="pill warn">Overpaid ${kr(-c.bal)}</span>`;
@@ -289,8 +322,8 @@ function pill(t,c){
 }
 
 /* ---------- persistence (Supabase) ---------- */
-function toRow(t){return {id:t.id,name:t.name||"",age:t.age||"",leader:t.leader||"",phone:t.phone||"",players:t.players||[],coaches:t.coaches||[],payments:t.payments||[],created_at:t.createdAt||Date.now()};}
-function fromRow(r){return {id:r.id,name:r.name,age:r.age,leader:r.leader,phone:r.phone,players:r.players||[],coaches:r.coaches||[],payments:r.payments||[],createdAt:r.created_at};}
+function toRow(t){return {id:t.id,name:t.name||"",age:t.age||"",leader:t.leader||"",phone:t.phone||"",players:t.players||[],coaches:t.coaches||[],payments:t.payments||[],class_name:t.cls||"",created_at:t.createdAt||Date.now()};}
+function fromRow(r){return {id:r.id,name:r.name,age:r.age,leader:r.leader,phone:r.phone,players:r.players||[],coaches:r.coaches||[],payments:r.payments||[],cls:r.class_name||"",createdAt:r.created_at};}
 function saveTeam(t){
   if(!live){render();return;}
   sb.from("teams").upsert(toRow(t)).then(({error})=>{ if(error) showErr(error); });
@@ -301,7 +334,7 @@ function deleteTeam(id){
   render();
 }
 function saveSettings(){
-  if(live){const st=S.settings; sb.from("settings").upsert({id:1,name:st.name,org:st.org,team_fee:st.teamFee,player_fee:st.playerFee}).then(({error})=>{ if(error) showErr(error); });}
+  if(live){const st=S.settings; sb.from("settings").upsert({id:1,name:st.name,org:st.org,team_fee:st.teamFee,player_fee:st.playerFee,swish:st.swish||""}).then(({error})=>{ if(error) showErr(error); });}
   render();
 }
 function showErr(e){
@@ -314,6 +347,7 @@ function render(){
   const st=S.settings;
   $("#tName").textContent=st.name||"Tournament"; $("#tOrg").textContent=st.org?("Powered by "+st.org):"";
   $("#btnSettings").hidden=!S.org; $("#btnAdd").hidden=!S.org;
+  {const cf=$("#catFilter"); const cats=[...new Set([...CATS,...S.teams.map(t=>t.age).filter(Boolean)])]; cf.hidden=!S.org; cf.innerHTML=`<option value="">All categories</option>`+cats.map(c=>`<option ${S.cat===c?"selected":""}>${esc(c)}</option>`).join("");}
   $("#fTeam").textContent=kr(st.teamFee); $("#fPlayer").textContent=kr(st.playerFee);
   let full=0,listed=0,late=0,paid=0,due=0,owe=0;
   S.teams.forEach(t=>{const c=calc(t); if(c.bal<=0) full++; listed+=c.total; late+=c.late; paid+=c.paid; due+=c.due; if(c.bal>0) owe+=c.bal;});
@@ -327,13 +361,14 @@ function renderList(){
   const q=S.q.trim().toLowerCase();
   const items=S.teams.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","sv"))
     .filter(t=>!q || (t.name+" "+(t.leader||"")+" "+(t.age||"")).toLowerCase().includes(q))
+    .filter(t=>!S.cat||t.age===S.cat)
     .filter(t=>S.filter==="all"||calc(t).status===S.filter);
   const ul=$("#teamList");
   if(!items.length){ul.innerHTML=`<li class="empty">${S.teams.length?"No teams match.":"No teams yet. Add the first one."}</li>`;return;}
   ul.innerHTML=items.map(t=>{const c=calc(t);
     return `<li><button type="button" data-id="${t.id}" aria-current="${S.sel===t.id&&S.view==="detail"}">
       <span class="tname">${esc(t.name)}</span>${pill(t,c)}
-      <span class="tmeta num">${c.total} players${(t.coaches||[]).length?` · ${(t.coaches||[]).length} coach${(t.coaches||[]).length>1?"es":""}`:""} · paid ${kr(c.paid)} of ${kr(c.due)}${c.late?` · ${c.late} added`:""}</span>
+      <span class="tmeta num">${S.org?`<b>${esc(t.age||"No category")}</b>${t.cls?" · Class "+esc(t.cls):""} · `:""}${c.total} players${(t.coaches||[]).length?` · ${(t.coaches||[]).length} coach${(t.coaches||[]).length>1?"es":""}`:""} · paid ${kr(c.paid)} of ${kr(c.due)}${c.late?` · ${c.late} added`:""}</span>
     </button></li>`;}).join("");
 }
 function renderRight(){
@@ -352,7 +387,7 @@ function renderRight(){
   r.innerHTML=`<div class="detail">
     <div class="dhead">
       <div><h2>${esc(t.name)}</h2>
-        <div class="meta">${[t.age,t.leader&&("Leader: "+esc(t.leader)),t.phone&&esc(t.phone)].filter(Boolean).join(" · ")}</div></div>
+        <div class="meta">${[t.age,t.cls&&("Class "+esc(t.cls)),t.leader&&("Leader: "+esc(t.leader)),t.phone&&esc(t.phone)].filter(Boolean).join(" · ")}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${pill(t,c)}<button class="btn small" id="btnEdit" type="button">Edit team</button></div>
     </div>
     ${flag}
@@ -375,26 +410,37 @@ function renderRight(){
         <tr><td>Paid</td><td>− ${kr(c.paid)}</td></tr>
         <tr class="bal ${c.bal>0?"owe":"ok"}"><td>${c.bal>0?"Left to pay":c.bal<0?"Overpaid":"Balance"}</td><td>${kr(Math.abs(c.bal))}</td></tr>
       </table>
-      ${S.org?`<div class="payrow">
-        <label for="payAmt" style="font-weight:600">Record payment</label>
-        <input type="number" id="payAmt" min="0" step="10" value="${Math.max(c.bal,0)}" aria-label="Amount in kronor">
-        <select id="payMethod" aria-label="Payment method"><option>Swish</option></select>
-        <button class="btn primary small" id="btnPay" type="button">Add payment</button>
-      </div>`:`<div class="payrow"><span>Payments are recorded by the Nordic Cup organisers when they receive them.</span></div>`}
+      <div class="payrow"><span>${S.org?"Tick the players (and team fee) below to record a Swish payment.":"Tick the players you want to pay for below. The organisers mark them as paid when your Swish arrives."}</span></div>
       ${pays.length?`<div class="paylog">${pays.map((p,i)=>`${kr(p.amount)} · ${esc(p.method)}${p.note?" · "+esc(p.note):""}${p.at?" · "+esc(p.at):""} ${S.org?'<button class="xbtn" data-delpay="'+i+'" type="button" aria-label="Remove payment">×</button>':""}`).join("<br>")}</div>`:""}
     </div>
 
-    <div class="sec-h"><h3>Players</h3><span class="meta num">${c.total} of ${MAX_PLAYERS} players</span></div>
+    <div class="sec-h"><h3>Players</h3><span class="meta num">${c.total} of ${MAX_PLAYERS} players · tap a player to edit</span></div>
+    <div class="sortbar" role="group" aria-label="Sort players">Sort by ${[["no","Number"],["name","Name"],["born","Age"],["paid","Paid / not paid"]].map(([k,l])=>`<button type="button" data-sortp="${k}" aria-pressed="${S.sortP===k}">${l}</button>`).join("")}</div>
     <ul class="players">
-      ${(t.players||[]).slice().sort((a,b)=>(+a.no||999)-(+b.no||999)).map(p=>`<li>
-        <span class="pn"><span class="shirt ${p.no?"":"none"}" title="Shirt number">${p.no?esc(p.no):"–"}</span>${esc(p.name)} ${p.year?`<span class="yr num">${esc(p.year)}</span>`:""} ${p.late?`<span class="pill late">Added at desk</span>`:""}</span>
+      ${sortPlayers(t.players||[],c).map(p=>S.editP===p.id?`<li class="editing"><form class="pedit" id="editPlayer" data-pid="${p.id}" autocomplete="off">
+        <input type="number" class="no" id="epNo" min="1" max="99" value="${esc(p.no||"")}" aria-label="Shirt number" required>
+        <input type="text" class="nm" id="epName" value="${esc(p.name)}" aria-label="Player name" required>
+        <input type="date" class="dt" id="epBorn" value="${esc(p.born||"")}" aria-label="Date of birth">
+        <button class="btn primary small" type="submit">Save</button><button class="btn small" type="button" id="epCancel">Cancel</button>
+      </form></li>`:`<li>
+        <span class="dot ${c.paidIds.has(p.id)?"paid":"unpaid"}" title="${c.paidIds.has(p.id)?"Paid":"Not paid"}"></span>
+        <span class="pn clickable" data-editp="${p.id}" title="Tap to edit"><span class="shirt ${p.no?"":"none"}" title="Shirt number">${p.no?esc(p.no):"–"}</span><span class="pname">${esc(p.name)}</span> ${p.born||p.year?`<span class="yr num">${esc(p.born||p.year)}</span>`:""} ${p.late?`<span class="pill late">Added at desk</span>`:""}</span>
+        ${c.paidIds.has(p.id)?`<span class="paidtag">Paid</span>`:`<label class="pick"><input type="checkbox" data-selp="${p.id}" ${S.selP.has(p.id)?"checked":""} aria-label="Pay for ${esc(p.name)}">Pay</label>`}
         <button class="xbtn" type="button" data-delp="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>
       </li>`).join("")||`<li class="empty" style="justify-content:center">No players on the list yet.</li>`}
     </ul>
+    ${(()=>{const unpaid=(t.players||[]).filter(p=>!c.paidIds.has(p.id)); const sel=unpaid.filter(p=>S.selP.has(p.id)); const fee=!c.feePaid&&S.selFee; const sum=(fee?c.tf:0)+sel.length*c.pf; const nos=sel.map(p=>p.no?"#"+p.no:p.name).join(", ");
+      return `<div class="paysum">
+      <div class="row"><span><span class="dot ${c.feePaid?"paid":"unpaid"}"></span>Team fee</span>${c.feePaid?`<span class="paidtag">Paid · ${kr(c.tf)}</span>`:`<label class="pick"><input type="checkbox" id="selFee" ${S.selFee?"checked":""}> Pay ${kr(c.tf)}</label>`}</div>
+      <div class="row"><span>Players selected: <b class="num">${sel.length}</b> × ${kr(c.pf)}${nos?` <span class="yr">(${esc(nos)})</span>`:""}</span><span class="num">${kr(sel.length*c.pf)}</span></div>
+      <div class="row"><span style="font-size:13px;color:var(--muted)">${c.playersCovered} of ${c.total} players paid · ${unpaid.length} left</span>${unpaid.length?`<span style="display:flex;gap:12px"><button type="button" class="linkish" id="selAll">Select all unpaid</button>${sel.length||fee?`<button type="button" class="linkish" id="selNone">Clear</button>`:""}</span>`:""}</div>
+      <div class="row tot"><span>To pay now</span><span class="num">${kr(sum)}</span></div>
+      ${sum?(S.org?`<div class="row how"><span>Swish received for this selection?</span><button class="btn primary small" id="btnPaySel" type="button">Mark as paid · ${kr(sum)}</button></div>`:`<div class="row how"><span>Swish <b>${kr(sum)}</b> to <b>${esc(S.settings.swish||"the Nordic Cup Swish number")}</b> with the message <b>${esc(t.name)}</b>. The organisers will mark the players as paid.</span></div>`):""}
+    </div>`;})()}
     ${c.total>=MAX_PLAYERS?`<p class="hint"><b>Maximum ${MAX_PLAYERS} players reached.</b> Remove a player to add another.</p>`:""}<form class="addp" id="addPlayer" autocomplete="off" ${c.total>=MAX_PLAYERS?"hidden":""}>
       <input type="number" class="no" id="newPNo" placeholder="No." min="1" max="99" aria-label="Shirt number" required>
       <input type="text" id="newPName" placeholder="${S.org?"Player not on the list":"Player name"}" aria-label="Player name" required>
-      <input type="number" id="newPYear" placeholder="Born" min="2000" max="2025" aria-label="Birth year">
+      <input type="date" id="newPBorn" aria-label="Date of birth" title="Date of birth">
       <button class="btn primary" type="submit">Add player</button>
     </form>
     <p class="hint">${S.org?`A player added here is marked "Added at desk" and ${kr(c.pf)} is added to the team's bill.`:`Each player on the list adds ${kr(c.pf)} to your team's bill.`}</p>
@@ -416,20 +462,21 @@ function renderRight(){
 }
 function renderTeamForm(r){
   const t = S.view==="edit" ? S.teams.find(x=>x.id===S.sel) : null;
-  const names = t ? (t.players||[]).filter(p=>!p.late).map(p=>(p.no?p.no+" ":"")+p.name+(p.year?", "+p.year:"")).join("\n") : "";
+  const names = t ? (t.players||[]).filter(p=>!p.late).map(p=>(p.no?p.no+" ":"")+p.name+(p.born||p.year?", "+(p.born||p.year):"")).join("\n") : "";
   const pre="";
   r.innerHTML=`<form class="form" id="teamForm" autocomplete="off">
     <h2>${t?"Edit team":"Register a team"}</h2>
     <div class="row">
       <label>Team name<input type="text" id="tfName" required value="${esc(t?.name||"")}"></label>
       <label>Category<select id="tfAge">${CATS.map(c=>`<option ${t?.age===c?"selected":""}>${c}</option>`).join("")}</select></label>
+      ${S.org?`<label>Class<input type="text" id="tfCls" placeholder="Set later, e.g. A" value="${esc(t?.cls||"")}"></label>`:""}
     </div>
     <div class="row">
       <label>Team leader<input type="text" id="tfLeader" value="${esc(t?.leader||"")}"></label>
       <label>Phone<input type="text" id="tfPhone" value="${esc(t?.phone||"")}"></label>
     </div>
-    <label>Registered players, one per line (number name, birth year) · max ${MAX_PLAYERS}
-      <textarea id="tfPlayers" rows="8" placeholder="7 Elias Berg, 2014&#10;10 Noah Lind, 2014">${esc(names)}</textarea></label>
+    <label>Registered players, one per line (number name, date of birth YYYY-MM-DD) · max ${MAX_PLAYERS}
+      <textarea id="tfPlayers" rows="8" placeholder="7 Elias Berg, 2014-03-12&#10;10 Noah Lind, 2014-07-30">${esc(names)}</textarea></label>
     ${t?`<p class="hint" style="margin:0">Players added at the desk stay on the list. Edit them on the team page.</p>`:`<label>Already paid before the tournament (kr)<input type="number" id="tfPaid" min="0" step="10" value="${pre}" placeholder="0"></label>`}
     <div class="actions">
       <button class="btn primary" type="submit">${t?"Save changes":"Add team"}</button>
@@ -447,6 +494,7 @@ function renderSettings(r){
       <label>Team fee (kr)<input type="number" id="sfTeam" min="0" value="${st.teamFee}"></label>
       <label>Fee per player (kr)<input type="number" id="sfPlayer" min="0" value="${st.playerFee}"></label>
     </div>
+    <label>Swish number teams pay to<input type="text" id="sfSwish" placeholder="e.g. 123 456 78 90" value="${esc(st.swish||"")}"></label>
     <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="sfCancel">Cancel</button></div>
   </form>`;
 }
@@ -455,8 +503,8 @@ function renderSettings(r){
 function parsePlayers(text){
   return text.split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{
     let no=""; const n=l.match(/^#?(\d{1,2})[\s.,:-]+(.*)$/); if(n){no=String(+n[1]); l=n[2].trim();}
-    const m=l.match(/^(.*?)[,;\s]+((?:19|20)\d\d)\s*$/);
-    return m?{no,name:m[1].trim(),year:m[2]}:{no,name:l,year:""};
+    const m=l.match(/^(.*?)[,;\s]+((?:19|20)\d\d(?:-\d\d-\d\d)?)\s*$/);
+    return m?{no,name:m[1].trim(),year:m[2].slice(0,4),born:m[2].length>4?m[2]:""}:{no,name:l,year:"",born:""};
   });
 }
 const today=()=>new Date().toLocaleString("sv-SE",{weekday:"short",hour:"2-digit",minute:"2-digit"});
@@ -464,7 +512,7 @@ function cur(){return S.teams.find(x=>x.id===S.sel);}
 
 document.addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b) return;
-  if(b.dataset.id){S.sel=b.dataset.id;S.view="detail";S.confirmDel=false;render();
+  if(b.dataset.id){if(S.sel!==b.dataset.id){S.selP.clear();S.selFee=false;S.editP=null;} S.sel=b.dataset.id;S.view="detail";S.confirmDel=false;render();
     if(matchMedia("(max-width:860px)").matches) $("#right").scrollIntoView({behavior:"smooth",block:"start"}); return;}
   if(b.dataset.f){S.filter=b.dataset.f;document.querySelectorAll(".filters button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderList();return;}
   if(b.id==="btnAdd"){S.view="add";S.confirmDel=false;render();$("#tfName").focus();return;}
@@ -477,8 +525,13 @@ document.addEventListener("click",e=>{
   if(b.dataset.delc){t.coaches=(t.coaches||[]).filter(p=>p.id!==b.dataset.delc); if(t.coaches.length&&!t.coaches.some(c=>c.main)) t.coaches[0].main=true; saveTeam(t); render(); return;}
   if(b.dataset.mainc){(t.coaches||[]).forEach(c=>c.main=(c.id===b.dataset.mainc)); saveTeam(t); render(); return;}
   if(b.dataset.delpay!==undefined){t.payments.splice(Number(b.dataset.delpay),1); saveTeam(t); render(); return;}
-  if(b.id==="btnPay"){const a=Number($("#payAmt").value); if(!a) return;
-    t.payments=t.payments||[]; t.payments.push({amount:a,method:$("#payMethod").value,at:today()}); saveTeam(t); render(); return;}
+  if(b.dataset.sortp){S.sortP=b.dataset.sortp; renderRight(); return;}
+  if(b.id==="epCancel"){S.editP=null; renderRight(); return;}
+  if(b.id==="selAll"){const c=calc(t); (t.players||[]).forEach(p=>{if(!c.paidIds.has(p.id)) S.selP.add(p.id);}); if(!c.feePaid) S.selFee=true; renderRight(); return;}
+  if(b.id==="selNone"){S.selP.clear(); S.selFee=false; renderRight(); return;}
+  if(b.id==="btnPaySel"&&S.org){const c=calc(t); const sel=(t.players||[]).filter(p=>S.selP.has(p.id)&&!c.paidIds.has(p.id)); const fee=!c.feePaid&&S.selFee; const amount=(fee?c.tf:0)+sel.length*c.pf; if(!amount) return;
+    const parts=[]; if(fee) parts.push("Team fee"); if(sel.length) parts.push(sel.length+" player"+(sel.length>1?"s":"")+" ("+sel.map(p=>p.no?"#"+p.no:p.name).join(", ")+")");
+    t.payments=t.payments||[]; t.payments.push({amount,method:"Swish",note:parts.join(" + "),fee,players:sel.map(p=>p.id),at:today()}); S.selP.clear(); S.selFee=false; saveTeam(t); render(); return;}
 });
 document.addEventListener("submit",e=>{
   e.preventDefault();
@@ -486,12 +539,19 @@ document.addEventListener("submit",e=>{
   if(f.id==="addPlayer"){const t=cur(); const name=$("#newPName").value.trim(); if(!t||!name||(t.players||[]).length>=MAX_PLAYERS) return;
     const no=String(parseInt($("#newPNo").value,10)||""); if(!no||+no<1||+no>99){(()=>{const n=$("#modeNote");n.hidden=false;n.textContent="Enter a shirt number between 1 and 99.";})();return;}
     if((t.players||[]).some(p=>String(p.no)===no)){(()=>{const n=$("#modeNote");n.hidden=false;n.textContent="Number "+no+" is already taken in this team.";})();return;}
-    $("#modeNote").hidden=true; t.players=t.players||[]; t.players.push({id:uid(),no,name,year:$("#newPYear").value||"",late:S.org});
+    $("#modeNote").hidden=true; t.players=t.players||[]; const born=$("#newPBorn").value||""; t.players.push({id:uid(),no,name,born,year:born.slice(0,4),late:S.org});
     saveTeam(t); render(); $("#newPName").focus(); return;}
+  if(f.id==="editPlayer"){const t=cur(); if(!t) return; const p=(t.players||[]).find(x=>x.id===f.dataset.pid); if(!p) return;
+    const no=String(parseInt($("#epNo").value,10)||""); const n=$("#modeNote");
+    if(!no||+no<1||+no>99){n.hidden=false;n.textContent="Enter a shirt number between 1 and 99.";return;}
+    if(t.players.some(x=>x.id!==p.id&&String(x.no)===no)){n.hidden=false;n.textContent="Number "+no+" is already taken in this team.";return;}
+    const name=$("#epName").value.trim(); if(!name) return;
+    n.hidden=true; p.no=no; p.name=name; p.born=$("#epBorn").value||""; if(p.born) p.year=p.born.slice(0,4);
+    S.editP=null; saveTeam(t); render(); return;}
   if(f.id==="addCoach"){const t=cur(); const name=$("#newCName").value.trim(); if(!t||!name||(t.coaches||[]).length>=MAX_COACHES) return;
     t.coaches=t.coaches||[]; t.coaches.push({id:uid(),name,phone:$("#newCPhone").value.trim(),main:!t.coaches.some(c=>c.main)});
     saveTeam(t); render(); $("#newCName").focus(); return;}
-  if(f.id==="setForm"){S.settings={name:$("#sfName").value.trim()||"Tournament",org:$("#sfOrg").value.trim(),teamFee:Number($("#sfTeam").value)||0,playerFee:Number($("#sfPlayer").value)||0};
+  if(f.id==="setForm"){S.settings={name:$("#sfName").value.trim()||"Tournament",org:$("#sfOrg").value.trim(),teamFee:Number($("#sfTeam").value)||0,playerFee:Number($("#sfPlayer").value)||0,swish:$("#sfSwish").value.trim()};
     S.view="detail"; saveSettings(); return;}
   if(f.id==="teamForm"){
     const parsed=parsePlayers($("#tfPlayers").value);
@@ -500,11 +560,11 @@ document.addEventListener("submit",e=>{
     let t = S.view==="edit" ? cur() : null;
     if(t){
       const old=t.players||[];
-      const regs=parsed.map(np=>{const m=old.find(o=>!o.late&&o.name.toLowerCase()===np.name.toLowerCase()); return m?{...m,name:np.name,year:np.year,no:np.no||m.no||""}:{id:uid(),...np,late:false};});
+      const regs=parsed.map(np=>{const m=old.find(o=>!o.late&&o.name.toLowerCase()===np.name.toLowerCase()); return m?{...m,name:np.name,year:np.year,born:np.born||(np.year===m.year?m.born||"":""),no:np.no||m.no||""}:{id:uid(),...np,late:false};});
       t.players=[...regs,...old.filter(o=>o.late)];
-      Object.assign(t,{name:$("#tfName").value.trim(),age:$("#tfAge").value.trim(),leader:$("#tfLeader").value.trim(),phone:$("#tfPhone").value.trim()});
+      Object.assign(t,{name:$("#tfName").value.trim(),age:$("#tfAge").value.trim(),leader:$("#tfLeader").value.trim(),phone:$("#tfPhone").value.trim()},S.org?{cls:$("#tfCls").value.trim()}:{});
     } else {
-      t={id:uid(),name:$("#tfName").value.trim(),age:$("#tfAge").value.trim(),leader:$("#tfLeader").value.trim(),phone:$("#tfPhone").value.trim(),
+      t={id:uid(),name:$("#tfName").value.trim(),age:$("#tfAge").value.trim(),cls:S.org?$("#tfCls").value.trim():"",leader:$("#tfLeader").value.trim(),phone:$("#tfPhone").value.trim(),
         players:parsed.map(p=>({id:uid(),...p,late:false})),payments:[],createdAt:Date.now()};
       const pre=Number($("#tfPaid").value); if(pre>0) t.payments.push({amount:pre,method:"Swish",at:today()});
       S.teams.push(t);
@@ -513,24 +573,26 @@ document.addEventListener("submit",e=>{
   }
 });
 $("#search").addEventListener("input",e=>{S.q=e.target.value;renderList();});
+document.addEventListener("click",e=>{const x=e.target.closest("[data-editp]"); if(x){S.editP=x.dataset.editp; renderRight(); setTimeout(()=>$("#epName")?.focus(),0);}});
+document.addEventListener("change",e=>{const x=e.target; if(x.id==="catFilter"){S.cat=x.value; renderList(); return;} if(x.dataset&&x.dataset.selp){x.checked?S.selP.add(x.dataset.selp):S.selP.delete(x.dataset.selp); renderRight();} else if(x.id==="selFee"){S.selFee=x.checked; renderRight();}});
 
 /* ---------- boot ---------- */
 function sample(){
   const P=[["Elias Berg","Noah Lind","Liam Ek","Hugo Sund","Adam Nord","Leo Falk","Oscar Dahl","Lucas Ström","Axel Wik","Theo Borg","Ali Hassan","Sam Kvist"],
            ["Isak Holm","William Ek","Omar Said","Melvin Ås","Vincent Lund","Charlie Berg","Alfred Sjö","Nils Rask","Filip Moen","Loke Dahl","Elton Blom","Arvid Hed"],
            ["Jack Lind","Viggo Nord","Milo Falk","Otto Borg","Sixten Ek","Frans Wik","Ludvig Sund","Adrian Kvist","Malte Rosén","Harry Björk","Yusuf Ali","Kevin Strand"]];
-  const mk=(names,y)=>names.map((n,i)=>({id:y+"-"+(i+1),name:n,year:String(y),late:false}));
+  const mk=(names,y)=>names.map((n,i)=>({id:y+"-"+(i+1),no:String(i+1),name:n,year:String(y),late:false}));
   S.teams=[
-    {id:"yfc2014",name:"Youth FC 2014",age:"P2014",leader:"",phone:"",players:mk(P[0],2014),coaches:[{id:"c14",name:"Johan Berg",phone:"070-111 22 33"}],payments:[{amount:3850,method:"Bank transfer",note:"Team fee",at:""},{amount:960,method:"Swish",note:"Player fees, 12 players",at:""}]},
-    {id:"yfc2015",name:"Youth FC 2015",age:"P2015",leader:"",phone:"",players:mk(P[1],2015),payments:[{amount:3850,method:"Bank transfer",note:"Team fee",at:""},{amount:480,method:"Swish",note:"Player fees, 6 players",at:""}]},
-    {id:"yfc2016",name:"Youth FC 2016",age:"P2016",leader:"",phone:"",players:mk(P[2],2016),payments:[{amount:3850,method:"Bank transfer",note:"Team fee",at:""}]}
+    {id:"yfc2014",name:"Youth FC 2014",age:"P2014",leader:"",phone:"",players:mk(P[0],2014),coaches:[{id:"c14",name:"Johan Berg",phone:"070-111 22 33"}],payments:[{amount:3850,method:"Swish",note:"Team fee",fee:true,players:[],at:""},{amount:960,method:"Swish",note:"12 players",players:P[0].map((_,i)=>"2014-"+(i+1)),at:""}]},
+    {id:"yfc2015",name:"Youth FC 2015",age:"P2015",leader:"",phone:"",players:mk(P[1],2015),payments:[{amount:3850,method:"Swish",note:"Team fee",fee:true,players:[],at:""},{amount:480,method:"Swish",note:"6 players (#1–#6)",players:[1,2,3,4,5,6].map(i=>"2015-"+i),at:""}]},
+    {id:"yfc2016",name:"Youth FC 2016",age:"P2016",leader:"",phone:"",players:mk(P[2],2016),payments:[{amount:3850,method:"Swish",note:"Team fee",fee:true,players:[],at:""}]}
   ];
   S.sel="yfc2015";
 }
 async function loadAll(){
   const [st,tm]=await Promise.all([sb.from("settings").select("*").eq("id",1).maybeSingle(), sb.from("teams").select("*")]);
   if(tm.error){showErr(tm.error);return;}
-  if(st.data) S.settings={name:st.data.name,org:st.data.org,teamFee:Number(st.data.team_fee),playerFee:Number(st.data.player_fee)};
+  if(st.data) S.settings={name:st.data.name,org:st.data.org,teamFee:Number(st.data.team_fee),playerFee:Number(st.data.player_fee),swish:st.data.swish||""};
   S.teams=(tm.data||[]).map(fromRow);
   if(!S.teams.find(t=>t.id===S.sel)) S.sel=S.teams.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","sv"))[0]?.id||null;
   if(S.view==="edit"||S.view==="add"||S.view==="settings"){ renderList(); return; } // don't wipe a form being typed
