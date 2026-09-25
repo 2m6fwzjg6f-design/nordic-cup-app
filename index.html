@@ -172,7 +172,7 @@ textarea{width:100%;resize:vertical}
 #authForm h2{font-size:26px}
 #authForm p{margin:0;color:var(--muted)}
 #authForm label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
-#authForm input{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:100%;font-size:16px;font-weight:400;color:var(--ink);min-width:0}
+#authForm input,#authForm select{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:100%;font-size:16px;font-weight:400;color:var(--ink);min-width:0}
 #authForm .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .btn.big{padding:12px;font-size:16px}
 #authForm .linkbtn{justify-self:center;color:var(--pitch)}
@@ -251,6 +251,7 @@ const $ = s => document.querySelector(s);
 const kr = n => (Math.round(n)||0).toLocaleString("sv-SE") + " kr";
 const uid = () => Math.random().toString(36).slice(2,10);
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const CATS=["Boys 2014"], MAX_PLAYERS=15, MAX_COACHES=3;
 
 function calc(t){
   const st=S.settings, ps=t.players||[], tf=Number(st.teamFee)||0, pf=Number(st.playerFee)||0;
@@ -368,27 +369,27 @@ function renderRight(){
       ${pays.length?`<div class="paylog">${pays.map((p,i)=>`${kr(p.amount)} · ${esc(p.method)}${p.note?" · "+esc(p.note):""}${p.at?" · "+esc(p.at):""} ${S.org?'<button class="xbtn" data-delpay="'+i+'" type="button" aria-label="Remove payment">×</button>':""}`).join("<br>")}</div>`:""}
     </div>
 
-    <div class="sec-h"><h3>Players</h3><span class="meta num">${c.total} on the list</span></div>
+    <div class="sec-h"><h3>Players</h3><span class="meta num">${c.total} of ${MAX_PLAYERS} players</span></div>
     <ul class="players">
       ${(t.players||[]).map(p=>`<li>
         <span class="pn">${esc(p.name)} ${p.year?`<span class="yr num">${esc(p.year)}</span>`:""} ${p.late?`<span class="pill late">Added at desk</span>`:""}</span>
         <button class="xbtn" type="button" data-delp="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>
       </li>`).join("")||`<li class="empty" style="justify-content:center">No players on the list yet.</li>`}
     </ul>
-    <form class="addp" id="addPlayer" autocomplete="off">
+    ${c.total>=MAX_PLAYERS?`<p class="hint"><b>Maximum ${MAX_PLAYERS} players reached.</b> Remove a player to add another.</p>`:""}<form class="addp" id="addPlayer" autocomplete="off" ${c.total>=MAX_PLAYERS?"hidden":""}>
       <input type="text" id="newPName" placeholder="${S.org?"Player not on the list":"Player name"}" aria-label="Player name" required>
       <input type="number" id="newPYear" placeholder="Born" min="2000" max="2025" aria-label="Birth year">
       <button class="btn primary" type="submit">Add player</button>
     </form>
     <p class="hint">${S.org?`A player added here is marked "Added at desk" and ${kr(c.pf)} is added to the team's bill.`:`Each player on the list adds ${kr(c.pf)} to your team's bill.`}</p>
-    <div class="sec-h"><h3>Coaches</h3><span class="meta num">${(t.coaches||[]).length} on the list · no fee</span></div>
+    <div class="sec-h"><h3>Coaches</h3><span class="meta num">${(t.coaches||[]).length} of ${MAX_COACHES} · no fee</span></div>
     <ul class="players">
       ${(t.coaches||[]).map(p=>`<li>
         <span class="pn">${esc(p.name)} ${p.phone?`<span class="yr">${esc(p.phone)}</span>`:""}</span>
         <button class="xbtn" type="button" data-delc="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>
       </li>`).join("")||`<li class="empty" style="justify-content:center">No coaches added yet.</li>`}
     </ul>
-    <form class="addp" id="addCoach" autocomplete="off">
+    ${(t.coaches||[]).length>=MAX_COACHES?`<p class="hint"><b>Maximum ${MAX_COACHES} coaches reached.</b></p>`:""}<form class="addp" id="addCoach" autocomplete="off" ${(t.coaches||[]).length>=MAX_COACHES?"hidden":""}>
       <input type="text" id="newCName" placeholder="Coach name" aria-label="Coach name" required>
       <input type="text" id="newCPhone" placeholder="Phone" aria-label="Coach phone">
       <button class="btn primary" type="submit">Add coach</button>
@@ -404,13 +405,13 @@ function renderTeamForm(r){
     <h2>${t?"Edit team":"Register a team"}</h2>
     <div class="row">
       <label>Team name<input type="text" id="tfName" required value="${esc(t?.name||"")}"></label>
-      <label>Age group<input type="text" id="tfAge" placeholder="e.g. P12" value="${esc(t?.age||"")}"></label>
+      <label>Category<select id="tfAge">${CATS.map(c=>`<option ${t?.age===c?"selected":""}>${c}</option>`).join("")}</select></label>
     </div>
     <div class="row">
       <label>Team leader<input type="text" id="tfLeader" value="${esc(t?.leader||"")}"></label>
       <label>Phone<input type="text" id="tfPhone" value="${esc(t?.phone||"")}"></label>
     </div>
-    <label>Registered players, one per line (name, birth year)
+    <label>Registered players, one per line (name, birth year) · max ${MAX_PLAYERS}
       <textarea id="tfPlayers" rows="8" placeholder="Elias Berg, 2014&#10;Noah Lind, 2014">${esc(names)}</textarea></label>
     ${t?`<p class="hint" style="margin:0">Players added at the desk stay on the list. Edit them on the team page.</p>`:`<label>Already paid before the tournament (kr)<input type="number" id="tfPaid" min="0" step="10" value="${pre}" placeholder="0"></label>`}
     <div class="actions">
@@ -463,16 +464,18 @@ document.addEventListener("click",e=>{
 document.addEventListener("submit",e=>{
   e.preventDefault();
   const f=e.target;
-  if(f.id==="addPlayer"){const t=cur(); const name=$("#newPName").value.trim(); if(!t||!name) return;
+  if(f.id==="addPlayer"){const t=cur(); const name=$("#newPName").value.trim(); if(!t||!name||(t.players||[]).length>=MAX_PLAYERS) return;
     t.players=t.players||[]; t.players.push({id:uid(),name,year:$("#newPYear").value||"",late:S.org});
     saveTeam(t); render(); $("#newPName").focus(); return;}
-  if(f.id==="addCoach"){const t=cur(); const name=$("#newCName").value.trim(); if(!t||!name) return;
+  if(f.id==="addCoach"){const t=cur(); const name=$("#newCName").value.trim(); if(!t||!name||(t.coaches||[]).length>=MAX_COACHES) return;
     t.coaches=t.coaches||[]; t.coaches.push({id:uid(),name,phone:$("#newCPhone").value.trim()});
     saveTeam(t); render(); $("#newCName").focus(); return;}
   if(f.id==="setForm"){S.settings={name:$("#sfName").value.trim()||"Tournament",org:$("#sfOrg").value.trim(),teamFee:Number($("#sfTeam").value)||0,playerFee:Number($("#sfPlayer").value)||0};
     S.view="detail"; saveSettings(); return;}
   if(f.id==="teamForm"){
     const parsed=parsePlayers($("#tfPlayers").value);
+    const lateN=(S.view==="edit"&&cur())?(cur().players||[]).filter(p=>p.late).length:0;
+    if(parsed.length+lateN>MAX_PLAYERS){const n=$("#modeNote"); n.hidden=false; n.textContent=`A team can have at most ${MAX_PLAYERS} players. The list has ${parsed.length+lateN}.`; n.scrollIntoView({block:"center"}); return;}
     let t = S.view==="edit" ? cur() : null;
     if(t){
       const old=t.players||[];
@@ -531,7 +534,7 @@ function renderAuth(mode,msg,isErr){
   const F=(id,label,type,extra)=>`<label>${label}<input type="${type}" id="${id}" ${extra||""}></label>`;
   const f=$("#authForm");
   if(mode==="login") f.innerHTML=`<h2>Log in</h2>${F("aEmail","Email","email",'autocomplete="username" required')}${F("aPass","Password","password",'autocomplete="current-password" required')}<button class="btn primary big" type="submit">Log in</button><button type="button" class="linkbtn" data-auth="forgot">Forgot password?</button>`;
-  if(mode==="signup") f.innerHTML=`<h2>Sign up your team</h2><p>Create an account to register your team, add your players and see what you owe.</p>${F("aName","Your name","text",'autocomplete="name" required')}${F("aTeam","Team name","text",'required placeholder="e.g. Youth FC 2015"')}<div class="row2">${F("aAge","Age group","text",'placeholder="e.g. P2015"')}${F("aPhone","Phone","tel",'autocomplete="tel"')}</div>${F("aEmail","Email","email",'autocomplete="username" required')}${F("aPass","Password (at least 6 characters)","password",'autocomplete="new-password" minlength="6" required')}<button class="btn primary big" type="submit">Create account</button>`;
+  if(mode==="signup") f.innerHTML=`<h2>Sign up your team</h2><p>Register your team for Nordic Cup 2027. Category: ${CATS.join(", ")}. Up to ${MAX_PLAYERS} players and ${MAX_COACHES} coaches per team.</p>${F("aName","Your name","text",'autocomplete="name" required')}${F("aTeam","Team name","text",'required placeholder="e.g. Youth FC 2014"')}<div class="row2"><label>Category<select id="aAge">${CATS.map(c=>`<option>${c}</option>`).join("")}</select></label>${F("aPhone","Phone","tel",'autocomplete="tel"')}</div>${F("aEmail","Email","email",'autocomplete="username" required')}${F("aPass","Password (at least 6 characters)","password",'autocomplete="new-password" minlength="6" required')}<button class="btn primary big" type="submit">Create account</button>`;
   if(mode==="forgot") f.innerHTML=`<h2>Forgot password</h2><p>Enter your email and we'll send you a link to choose a new password.</p>${F("aEmail","Email","email",'autocomplete="username" required')}<button class="btn primary big" type="submit">Send reset link</button><button type="button" class="linkbtn" data-auth="login">Back to log in</button>`;
   if(mode==="reset") f.innerHTML=`<h2>Choose a password</h2><p>Pick the password you'll use to log in from now on.</p>${F("aPass","New password (at least 6 characters)","password",'autocomplete="new-password" minlength="6" required')}${F("aPass2","Repeat password","password",'autocomplete="new-password" minlength="6" required')}<button class="btn primary big" type="submit">Save password</button>`;
   setMsg(msg,isErr);
